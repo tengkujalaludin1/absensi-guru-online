@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Absensi Guru QR Code</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- QR Scanner -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <!-- QR Generator -->
+  <script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
+</head>
+
+<body class="bg-emerald-900 min-h-screen p-4">
+
+<header class="text-center text-white mb-5">
+  <h1 class="text-3xl font-bold">Absensi Guru</h1>
+  <p>Pondok Pesantren Darul Ulum Indragiri</p>
+  <p id="clock" class="text-2xl mt-2 font-semibold"></p>
+</header>
+
+<div class="max-w-md mx-auto bg-white rounded-2xl shadow-xl p-4">
+
+  <p class="text-center text-slate-600 mb-3">
+    Arahkan kamera ke QR Code guru
+  </p>
+
+  <div id="reader" class="aspect-square rounded-xl overflow-hidden mb-4"></div>
+
+  <div class="flex gap-2 mb-3">
+    <button id="startBtn"
+      onclick="startScanner()"
+      class="flex-1 bg-emerald-600 text-white py-3 rounded-xl">
+      Mulai Scan
+    </button>
+
+    <button id="stopBtn"
+      onclick="stopScanner()"
+      class="flex-1 bg-slate-300 py-3 rounded-xl hidden">
+      Stop
+    </button>
+  </div>
+
+  <div id="result"
+    class="hidden bg-emerald-50 border border-emerald-200 p-3 rounded-xl mb-3">
+    <p id="nama" class="font-bold text-emerald-800"></p>
+    <p id="waktu" class="text-sm text-emerald-600"></p>
+  </div>
+
+  <canvas id="qrcode" class="mx-auto my-3"></canvas>
+
+  <button onclick="downloadQR()"
+    class="w-full bg-purple-600 text-white py-3 rounded-xl mb-2">
+    Download QR Code
+  </button>
+
+  <button onclick="downloadCSV()"
+    class="w-full bg-blue-600 text-white py-3 rounded-xl">
+    Download Rekap Absensi (CSV)
+  </button>
+</div>
+
+<footer class="text-center text-slate-300 text-xs mt-6">
+  Sistem Absensi Digital © 2024
+</footer>
+
+<script>
+/* JAM */
+setInterval(() => {
+  clock.textContent = new Date().toLocaleTimeString('id-ID');
+}, 1000);
+
+/* DATA */
+let html5QrCode;
+let scanning = false;
+let absensi = JSON.parse(localStorage.getItem('absensi')) || [];
+
+/* SCAN */
+async function startScanner() {
+  if (scanning) return;
+
+  html5QrCode = new Html5Qrcode("reader");
+  await html5QrCode.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 250 },
+    onScan
+  );
+
+  scanning = true;
+  startBtn.classList.add('hidden');
+  stopBtn.classList.remove('hidden');
+}
+
+async function stopScanner() {
+  if (!scanning) return;
+  await html5QrCode.stop();
+  scanning = false;
+  stopBtn.classList.add('hidden');
+  startBtn.classList.remove('hidden');
+}
+
+/* CALLBACK */
+function onScan(text) {
+  const now = new Date();
+  const tanggal = now.toLocaleDateString('id-ID');
+
+  // ANTI DOUBLE
+  const sudahAda = absensi.find(a =>
+    a.nama === text && a.tanggal === tanggal
+  );
+
+  if (sudahAda) {
+    alert('Guru sudah absen hari ini');
+    return;
+  }
+
+  const data = {
+    nama: text,
+    tanggal,
+    jam: now.toLocaleTimeString('id-ID')
+  };
+
+  absensi.push(data);
+  localStorage.setItem('absensi', JSON.stringify(absensi));
+
+  nama.textContent = data.nama;
+  waktu.textContent = `Tercatat ${data.tanggal} ${data.jam}`;
+  result.classList.remove('hidden');
+
+  QRCode.toCanvas(qrcode, text, { width: 220 });
+}
+
+/* CSV */
+function downloadCSV() {
+  if (absensi.length === 0) {
+    alert('Data masih kosong');
+    return;
+  }
+
+  let csv = 'Nama,Tanggal,Jam\n';
+  absensi.forEach(a => {
+    csv += `${a.nama},${a.tanggal},${a.jam}\n`;
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'rekap-absensi.csv';
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+/* QR */
+function downloadQR() {
+  const a = document.createElement('a');
+  a.href = qrcode.toDataURL('image/png');
+  a.download = 'qrcode-guru.png';
+  a.click();
+}
+
+/* FULLSCREEN MOBILE */
+document.addEventListener('click', () => {
+  if (!document.fullscreenElement && window.innerWidth < 768) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
+});
+</script>
+
+</body>
+</html>
